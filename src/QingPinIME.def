@@ -1,0 +1,7 @@
+; 轻拼输入法 —— COM 必需导出
+LIBRARY QingPinIME
+EXPORTS
+    DllCanUnloadNow         PRIVATE
+    DllGetClassObject       PRIVATE
+    DllRegisterServer       PRIVATE
+    DllUnregisterServer     PRIVATE

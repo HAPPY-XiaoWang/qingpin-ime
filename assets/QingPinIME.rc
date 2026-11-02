@@ -1,0 +1,38 @@
+// 轻拼输入法 资源文件 (版本信息 + 图标)
+// rc.exe 默认代码页不是 UTF-8, 故显式声明
+#pragma code_page(65001)
+
+#include <winver.h>
+
+#define IDI_QINGPIN 1
+
+IDI_QINGPIN ICON "qingpin.ico"
+
+1 VERSIONINFO
+ FILEVERSION    1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK  0x3fL
+ FILEFLAGS      0x0L
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_DLL
+ FILESUBTYPE    0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "CompanyName",      "QingPin"
+            VALUE "FileDescription",  "轻拼输入法 (QingPin IME)"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "QingPinIME"
+            VALUE "LegalCopyright",   "MIT License"
+            VALUE "OriginalFilename", "QingPinIME.dll"
+            VALUE "ProductName",      "轻拼输入法"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END
