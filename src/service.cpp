@@ -134,8 +134,9 @@ public:
         return pos_ >= 1 ? S_FALSE : S_OK;
     }
 
-private:
     explicit CEnumDisplayAttributeInfo(ULONG pos) : pos_(pos) {}
+
+private:
     ULONG pos_ = 0;
     LONG c_ = 1;
 };
