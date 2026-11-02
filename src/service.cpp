@@ -76,7 +76,7 @@ public:
         if (!pAttr) return E_INVALIDARG;
         ZeroMemory(pAttr, sizeof(*pAttr));
         pAttr->lsStyle = TF_LS_DOT;   // 输入中: 点状下划线
-        pAttr->fBold = FALSE;
+        pAttr->fBoldLine = FALSE;
         // 颜色取默认 (TF_CT_NONE = 0), 由应用程序主题决定
         return S_OK;
     }
@@ -86,6 +86,57 @@ public:
     STDMETHODIMP Reset() override { return S_OK; }
 
 private:
+    LONG c_ = 1;
+};
+
+// ---- 单元素显示属性枚举器 ---------------------------------------------------
+class CEnumDisplayAttributeInfo final : public IEnumTfDisplayAttributeInfo {
+public:
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override {
+        if (!ppv) return E_INVALIDARG;
+        *ppv = nullptr;
+        if (riid == IID_IUnknown || riid == IID_IEnumTfDisplayAttributeInfo) {
+            *ppv = static_cast<IEnumTfDisplayAttributeInfo*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+    STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&c_); }
+    STDMETHODIMP_(ULONG) Release() override {
+        ULONG c = InterlockedDecrement(&c_);
+        if (!c) delete this;
+        return c;
+    }
+
+    STDMETHODIMP Clone(IEnumTfDisplayAttributeInfo** ppEnum) override {
+        if (!ppEnum) return E_INVALIDARG;
+        *ppEnum = new (std::nothrow) CEnumDisplayAttributeInfo(pos_);
+        return *ppEnum ? S_OK : E_OUTOFMEMORY;
+    }
+    STDMETHODIMP Next(ULONG ulCount, ITfDisplayAttributeInfo** rgInfo,
+                      ULONG* pcFetched) override {
+        if (!rgInfo || (ulCount && !pcFetched)) return E_INVALIDARG;
+        if (pcFetched) *pcFetched = 0;
+        ULONG got = 0;
+        while (got < ulCount && pos_ == 0) {
+            rgInfo[got] = new (std::nothrow) CDisplayAttributeInfoImpl();
+            if (!rgInfo[got]) return got ? S_FALSE : E_OUTOFMEMORY;
+            pos_ = 1;
+            ++got;
+        }
+        if (pcFetched) *pcFetched = got;
+        return got == ulCount ? S_OK : S_FALSE;
+    }
+    STDMETHODIMP Reset() override { pos_ = 0; return S_OK; }
+    STDMETHODIMP Skip(ULONG ulCount) override {
+        pos_ = (ulCount > 1 - pos_) ? 1 : pos_ + ulCount;
+        return pos_ >= 1 ? S_FALSE : S_OK;
+    }
+
+private:
+    explicit CEnumDisplayAttributeInfo(ULONG pos) : pos_(pos) {}
+    ULONG pos_ = 0;
     LONG c_ = 1;
 };
 
@@ -370,7 +421,11 @@ HRESULT CTextService::EnsureComposition(TfEditCookie ec, ITfContext* pContext) {
         VariantInit(&var);
         var.vt = VT_I4;
         var.lVal = (LONG)m_atomAttrInput;
-        pRange->SetValue(ec, GUID_PROP_ATTRIBUTE, &var);
+        // 显示属性挂在 ITfContext 的属性存储上 (ITfRange 本身无 SetValue)
+        QPComPtr<ITfProperty> pProp;
+        if (SUCCEEDED(pContext->GetProperty(GUID_PROP_ATTRIBUTE, &pProp)) &&
+            pProp.Get())
+            pProp->SetValue(ec, pRange.Get(), &var);
         VariantClear(&var);
     }
     return S_OK;
@@ -390,7 +445,8 @@ HRESULT CTextService::UpdateCompositionText(TfEditCookie ec) {
 
 void CTextService::EndComposition(TfEditCookie ec, bool cancel) {
     if (m_pComposition.Get()) {
-        m_pComposition->EndComposition(ec, cancel ? TRUE : FALSE);
+        (void)cancel;  // ITfComposition::EndComposition 仅带 ec, 组合范围原样保留
+        m_pComposition->EndComposition(ec);
         m_pComposition.Release();
     }
 }
@@ -744,7 +800,7 @@ void CTextService::TrackShiftKey(WPARAM vk, bool down) {
 // ITfKeyEventSink
 // ===========================================================================
 
-STDMETHODIMP CTextService::OnSetFocus(ITfDocumentMgr* /*pDocMgr*/) {
+STDMETHODIMP CTextService::OnSetFocus(BOOL /*fForeground*/) {
     return S_OK;  // 焦点管理由 ITfThreadMgrEventSink::OnSetFocus(2参) 负责
 }
 
@@ -869,12 +925,19 @@ STDMETHODIMP CTextService::OnEndEdit(ITfContext* pContext, TfEditCookie /*ec*/,
     return S_OK;
 }
 
-STDMETHODIMP CTextService::OnLayoutChange(TfEditCookie ec, ITfContext* pContext,
-                                          TfLayoutCookie /*lcookie*/) {
-    // 插入点移动: 跟随候选窗
+STDMETHODIMP CTextService::OnLayoutChange(ITfContext* pContext,
+                                          TfLayoutCode /*lcode*/,
+                                          ITfContextView* /*pView*/) {
+    // 插入点移动: 跟随候选窗 (同步只读会话取新光标矩形)
     if (m_bActivated && IsComposing() && pContext == m_pTextCtx.Get()) {
         RECT r = m_lastRect;
-        if (GetCaretRect(pContext, ec, &r) || FallbackCaretRect(&r)) {
+        bool got = false;
+        RequestEdit(pContext, TF_ES_READ | TF_ES_SYNC,
+                    [&](TfEditCookie ec) {
+                        got = GetCaretRect(pContext, ec, &r);
+                        return S_OK;
+                    });
+        if (got || FallbackCaretRect(&r)) {
             m_lastRect = r;
             if (m_bWndOk && m_wnd.Visible()) m_wnd.Reposition(r);
         }
@@ -900,15 +963,16 @@ STDMETHODIMP CTextService::OnCompositionTerminated(TfEditCookie /*ecWrite*/,
 // ITfDisplayAttributeProvider
 // ===========================================================================
 
-STDMETHODIMP CTextService::GetDisplayAttributeCount(INT* pnCount) {
-    if (!pnCount) return E_INVALIDARG;
-    *pnCount = 1;
-    return S_OK;
+STDMETHODIMP CTextService::EnumDisplayAttributeInfo(IEnumTfDisplayAttributeInfo** ppEnum) {
+    if (!ppEnum) return E_INVALIDARG;
+    *ppEnum = new (std::nothrow) CEnumDisplayAttributeInfo(0);
+    return *ppEnum ? S_OK : E_OUTOFMEMORY;
 }
 
-STDMETHODIMP CTextService::GetDisplayAttributeInfo(INT /*iIndex*/,
+STDMETHODIMP CTextService::GetDisplayAttributeInfo(REFGUID guid,
                                                    ITfDisplayAttributeInfo** ppInfo) {
     if (!ppInfo) return E_INVALIDARG;
+    if (guid != GUID_QingPinAttrInput) return E_INVALIDARG;
     *ppInfo = new (std::nothrow) CDisplayAttributeInfoImpl();
     return *ppInfo ? S_OK : E_OUTOFMEMORY;
 }
