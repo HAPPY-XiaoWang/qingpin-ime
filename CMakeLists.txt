@@ -10,6 +10,11 @@ endif()
 
 add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 
+# 全部目标统一 UTF-8 源码编码 (否则英文系统上中文字面量会被按 ANSI 码页误读)
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 # ---- 跨平台核心引擎 (词库/切分/查询, 也被测试与词库工具使用) ----------------
 add_library(qpcore STATIC
     src/engine/segmenter.cpp
