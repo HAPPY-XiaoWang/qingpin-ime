@@ -11,8 +11,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect Visual Studio version
+        shell: pwsh
+        run: |
+          $v = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property catalog_productLineVersion
+          if (-not $v) { $v = "17" }
+          if ([int]($v.ToString().Split('.')[0]) -ge 18) { $gen = "Visual Studio 18 2026" } else { $gen = "Visual Studio 17 2022" }
+          "VS_GEN=$gen" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "VS $v -> generator: $gen"
+
       - name: Configure x64
-        run: cmake -B build64 -G "Visual Studio 17 2022" -A x64
+        run: cmake -B build64 -G "$env:VS_GEN" -A x64
 
       - name: Build x64
         run: cmake --build build64 --config Release
@@ -21,7 +30,7 @@ jobs:
         run: ./build64/Release/qingpin-test.exe dict/dict.txt "$env:RUNNER_TEMP/userdict.txt"
 
       - name: Configure Win32
-        run: cmake -B build32 -G "Visual Studio 17 2022" -A Win32
+        run: cmake -B build32 -G "$env:VS_GEN" -A Win32
 
       - name: Build Win32
         run: cmake --build build32 --config Release
