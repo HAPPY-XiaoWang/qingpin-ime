@@ -15,6 +15,7 @@ namespace qp {
 
 class CTextService
     : public ITfTextInputProcessorEx,
+      public ITfFunction,           // GetDisplayName (注: ITfTextInputProcessor 并不继承它)
       public ITfThreadMgrEventSink,
       public ITfTextEditSink,
       public ITfTextLayoutSink,
@@ -43,22 +44,23 @@ public:
     // ---- ITfThreadMgrEventSink ----
     STDMETHODIMP OnInitDocumentMgr(ITfDocumentMgr* pDocMgr) override;
     STDMETHODIMP OnUninitDocumentMgr(ITfDocumentMgr* pDocMgr) override;
-    // 与 ITfKeyEventSink::OnSetFocus 构成重载 (参数个数不同, 合法)
-    STDMETHODIMP OnSetFocus(ITfDocumentMgr* pDocMgrFocusPrev,
-                            ITfDocumentMgr* pDocMgrFocusNext) override;
     STDMETHODIMP OnPushContext(ITfContext* pContext) override;
     STDMETHODIMP OnPopContext(ITfContext* pContext) override;
+
+    // ---- ITfThreadMgrEventSink (续)
+    STDMETHODIMP OnSetFocus(ITfDocumentMgr* pDocMgrFocusPrev,
+                            ITfDocumentMgr* pDocMgrFocusNext) override;
 
     // ---- ITfTextEditSink ----
     STDMETHODIMP OnEndEdit(ITfContext* pContext, TfEditCookie ecReadOnly,
                            ITfEditRecord* pEditRecord) override;
 
     // ---- ITfTextLayoutSink ----
-    STDMETHODIMP OnLayoutChange(TfEditCookie ec, ITfContext* pContext,
-                                TfLayoutCookie lcookie) override;
+    STDMETHODIMP OnLayoutChange(ITfContext* pContext, TfLayoutCode lcode,
+                                ITfContextView* pView) override;
 
     // ---- ITfKeyEventSink ----
-    STDMETHODIMP OnSetFocus(ITfDocumentMgr* pDocMgr) override;
+    STDMETHODIMP OnSetFocus(BOOL fForeground) override;
     STDMETHODIMP OnTestKeyDown(ITfContext* pContext, WPARAM wParam, LPARAM lParam,
                                BOOL* pfEaten) override;
     STDMETHODIMP OnKeyDown(ITfContext* pContext, WPARAM wParam, LPARAM lParam,
@@ -75,8 +77,8 @@ public:
                                          ITfComposition* pComposition) override;
 
     // ---- ITfDisplayAttributeProvider ----
-    STDMETHODIMP GetDisplayAttributeCount(INT* pnCount) override;
-    STDMETHODIMP GetDisplayAttributeInfo(INT iIndex,
+    STDMETHODIMP EnumDisplayAttributeInfo(IEnumTfDisplayAttributeInfo** ppEnum) override;
+    STDMETHODIMP GetDisplayAttributeInfo(REFGUID guid,
                                          ITfDisplayAttributeInfo** ppInfo) override;
 
     // ---- ITfCompartmentEventSink ----
