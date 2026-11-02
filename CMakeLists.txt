@@ -37,7 +37,7 @@ endif()
 
 target_link_libraries(QingPinIME PRIVATE
     qpcore
-    user32 gdi32 advapi32 ole32 oleaut32 shell32 msctf uuid)
+    user32 gdi32 advapi32 ole32 oleaut32 shell32 uuid)
 
 set_target_properties(QingPinIME PROPERTIES OUTPUT_NAME "QingPinIME" PREFIX "")
 
